@@ -14,7 +14,7 @@ using System.Net.Http;
 
 namespace EphemerisFunctions
 {
-    public static class Function1
+    public static class SatPositionGenerate
     {
         [FunctionName("Function1")]
         public static async Task<IActionResult> Run(
@@ -24,7 +24,7 @@ namespace EphemerisFunctions
             
             log.LogInformation("C# HTTP trigger function processed a request.");
 
-            Dictionary<string, Tle> satellites = null; satellites = await Function1.DownloadEphemeris();
+            Dictionary<string, Tle> satellites = null; satellites = await SatPositionGenerate.DownloadEphemeris();
 
 
             string name = req.Query["name"];
@@ -33,14 +33,13 @@ namespace EphemerisFunctions
             dynamic data = JsonConvert.DeserializeObject(requestBody);
             name = name ?? data?.name;
 
-            Tle satTle;
-            satellites.TryGetValue(name, out satTle);
-            Satellite sat = new Satellite(satTle);
+            satellites.TryGetValue(name, out Tle satTle);
+            Satellite sat = new(satTle);
             EciTime eci = sat.PositionEci(DateTime.UtcNow);
 
             // Reference Postion to my location
-            Site siteLocal = new Site(-31.9505, 115.86, 0); // 0.00 N, 100.00 W, 0 km altitude
-            Geo g = new Geo(eci, new Julian(DateTime.UtcNow));
+            Site siteLocal = new(-31.9505, 115.86, 0.030); // 0.00 N, 100.00 W, 0 km altitude
+            Geo g = new(eci, new Julian(DateTime.UtcNow));
 
 
             // Other thing to Watch - Longtitude is 0 to 360 degrees..
@@ -48,11 +47,11 @@ namespace EphemerisFunctions
             g.LongitudeDeg.ToString();
             g.Altitude.ToString();
 
-            string responseMessage = string.IsNullOrEmpty(name)
-                ? "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response."
-                : $"Hello, {name}. This HTTP triggered function executed successfully.";
+            //string responseMessage = string.IsNullOrEmpty(name)
+               // ? "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response."
+               // : $"Satellite Name {name}, Latititude {g.LatitudeDeg}, Longtitude {g.LongitudeDeg}, Altitude {g.Altitude}";
 
-            return new OkObjectResult(responseMessage);
+            return new OkObjectResult(g);
         }
 
         public static async Task<Dictionary<string, Tle>> DownloadEphemeris()
@@ -70,9 +69,8 @@ namespace EphemerisFunctions
             // Line 2
             // Gap
 
-            string tle1 = "";
+            string satName = "";
             string tle2 = "";
-            string tle3 = "";
 
             var satMap = new Dictionary<string, Tle>();
 
@@ -90,17 +88,15 @@ namespace EphemerisFunctions
                 if (tleLine.StartsWith("2 "))
                 {
                     // line 2
-                    tle3 = tleLine;
                     // Once we have line 2 we can process
-                    Tle satelliteTle = new Tle(tle1, tle2, tle3);
-                    satMap.Add(tle1, satelliteTle);
+                    Tle satelliteTle = new Tle(satName, tle2, tleLine);
+                    satMap.Add(satName, satelliteTle);
                     lineLocated = true;
                 }
                 if (tleLine.Length > 2 && lineLocated == false)
                 {
                     // Name Line
-                    tle1 = tleLine.Trim();
-                    Console.WriteLine(tleLine);
+                    satName = tleLine.Trim();
                     // Increment as we have found a satellite
                 }
                 else
